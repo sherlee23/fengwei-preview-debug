@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>锋味派订购系统</title>
+    
+    <!-- PWA & App Icon -->
+    <meta name="theme-color" content="#d10000">
+    <link rel="apple-touch-icon" href="https://edfnhhthztskuuosuasw.supabase.co/storage/v1/object/public/product-photos/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="https://edfnhhthztskuuosuasw.supabase.co/storage/v1/object/public/product-photos/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="https://edfnhhthztskuuosuasw.supabase.co/storage/v1/object/public/product-photos/icon-512x512.png">
+
+    <!-- 1. 加载核心依赖库 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        @keyframes slide-in-down { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-in-down { animation: slide-in-down 0.3s ease-out forwards; }
+        @keyframes slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .animate-slide-in-right { animation: slide-in-right 0.3s ease-out forwards; }
+        @keyframes fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+        .toggle-checkbox:checked { right: 0; border-color: #48bb78; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #48bb78; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+        // --- SUPABASE 与常量设置 ---
+        const SUPABASE_URL = 'https://edfnhhthztskuuosuasw.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZm5oaHRoenRza3V1b3N1YXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5OTYxMTYsImV4cCI6MjA2NTU3MjExNn0.O3g2gjvsWagmWgmzoeJA8mPampvLYJr-KgqVwXsKoAo';
+        const WHATSAPP_NUMBER = '60162327792';
+        const ADMIN_PASSWORD = 'fengweipaiadmin';
+        const SELF_PICKUP_ADDRESS = `667, Jalan 24, Taman Perindustrian Ehsan Jaya, Kepong, 52100, Kuala Lumpur.`;
+        const PRODUCT_IMAGE_BASE_URL = 'https://edfnhhthztskuuosuasw.supabase.co/storage/v1/object/public/product-photos/';
+
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // --- UI 组件 ---
+        const LoadingSpinner = ({ text }) => (
+            <div className="text-center">
+                <svg className="mx-auto h-12 w-12 text-red-600 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {text && <p className="mt-2 text-lg font-semibold text-gray-700">{text}</p>}
+            </div>
+        );
+
+        const LoadingOverlay = ({ text }) => (
+            <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex justify-center items-center z-50">
+                <div className="text-center text-white">
+                    <LoadingSpinner text={text} />
+                </div>
+            </div>
+        );
+
+        const Toast = ({ message, type, onDismiss }) => {
+            const baseClasses = "flex items-center w-full max-w-xs p-4 space-x-4 text-gray-500 bg-white divide-x divide-gray-200 rounded-lg shadow-lg";
+            const typeClasses = { success: "text-green-500", danger: "text-red-500", warning: "text-yellow-500" };
+            const icons = {
+                success: <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>,
+                danger: <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>,
+                warning: <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.636-1.214 2.852-1.214 3.488 0l6.114 11.638c.636 1.214-.474 2.763-1.744 2.763H3.887c-1.27 0-2.38-1.549-1.744-2.763L8.257 3.099zM10 6a1 1 0 011 1v4a1 1 0 11-2 0V7a1 1 0 011-1zm-1 8a1 1 0 102 0 1 1 0 00-2 0z" clipRule="evenodd"></path></svg>,
+            };
+
+            useEffect(() => {
+                const timer = setTimeout(onDismiss, 3000);
+                return () => clearTimeout(timer);
+            }, [onDismiss]);
+
+            return (
+                <div className={`${baseClasses} animate-slide-in-down`}>
+                    <div className={`${typeClasses[type]}`}>{icons[type]}</div>
+                    <div className="pl-4 text-sm font-normal">{message}</div>
+                </div>
+            );
+        };
+
+        const ProductCard = ({ product, onAddToCart }) => {
+            const isOutOfStock = !product.is_unlimited && product.stock === 0;
+            const isLowStock = !product.is_unlimited && product.stock > 0 && product.minStock && product.stock <= product.minStock;
+            const productTypeLabel = product.is_unlimited ? '(预购)' : '(现货)';
+
+            return (
+                <div className={`bg-white rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 flex flex-col overflow-hidden ${isOutOfStock ? 'opacity-60 bg-gray-100' : ''}`}>
+                    <div className="relative">
+                        <div className="w-full h-52 bg-gray-200 flex items-center justify-center">
+                            <img src={product.image} alt={product.name} className="w-full h-full object-contain" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/400x400/cccccc/ffffff?text=Image+Error'; }} />
+                        </div>
+                        {isOutOfStock && <div className="absolute top-2 right-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">已售完</div>}
+                        {isLowStock && <div className="absolute top-2 right-2 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full">库存紧张</div>}
+                    </div>
+                    <div className="p-5 flex flex-col flex-grow">
+                        <h3 className="text-lg font-bold text-gray-800">{product.emoji} {product.name} <span className="text-sm font-normal text-gray-500">{productTypeLabel}</span></h3>
+                        <p className="text-sm text-gray-500 mb-3">库存: {product.is_unlimited ? '充足' : product.stock}</p>
+                        <div className="mt-auto">
+                            <div className="flex justify-between items-center">
+                                <p className="text-xl font-extrabold text-red-600">RM{Number(product.price).toFixed(2)}</p>
+                                <button
+                                    onClick={() => onAddToCart(product)}
+                                    disabled={isOutOfStock}
+                                    className="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    <i className="fas fa-cart-plus"></i>
+                                    添加
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        
+        // --- 主应用组件 ---
+        function App() {
+            const [view, setView] = useState('customer');
+            const [products, setProducts] = useState([]);
+            const [cart, setCart] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [loadingText, setLoadingText] = useState('加载中...');
+            const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+            const [lastOrder, setLastOrder] = useState(null);
+
+            const showToastMessage = (message, type = 'success') => {
+                setToast({ show: true, message, type });
+            };
+
+            const fetchProducts = useCallback(async () => {
+                setIsLoading(true);
+                setLoadingText('正在加载商品...');
+                const { data, error } = await supabase.from('products').select('*').eq('is_published', true).order('id');
+                if (error) {
+                    showToastMessage(`加载商品失败: ${error.message}`, 'danger');
+                    setProducts([]);
+                } else {
+                    const formattedProducts = data.map(p => ({
+                        ...p,
+                        image: p.image_url, 
+                        stock: p.stock_quantity ?? 0, 
+                        minStock: p.min_stock_threshold ?? 5 
+                    }));
+                    setProducts(formattedProducts);
+                }
+                setIsLoading(false);
+            }, []);
+            
+            useEffect(() => {
+                fetchProducts();
+            }, [fetchProducts]);
+
+            const addToCart = (product) => {
+                setCart(prevCart => {
+                    const existingItem = prevCart.find(item => item.id === product.id);
+                    if (existingItem) {
+                        if (product.is_unlimited || existingItem.quantity < product.stock) {
+                            showToastMessage(`${product.name} 已添加到购物车`, 'success');
+                            return prevCart.map(item =>
+                                item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+                            );
+                        } else {
+                            showToastMessage(`${product.name} 库存不足`, 'warning');
+                            return prevCart;
+                        }
+                    }
+                    showToastMessage(`${product.name} 已添加到购物车`, 'success');
+                    return [...prevCart, { ...product, quantity: 1 }];
+                });
+            };
+            
+            const updateCartQuantity = (productId, newQuantity) => {
+                const product = products.find(p => p.id === productId);
+                if (!product) return;
+
+                if (newQuantity <= 0) {
+                    setCart(prevCart => prevCart.filter(item => item.id !== productId));
+                } else if (!product.is_unlimited && newQuantity > product.stock) {
+                    showToastMessage(`库存不足，最多可购买 ${product.stock} 件`, 'warning');
+                    setCart(prevCart => prevCart.map(item => item.id === productId ? { ...item, quantity: product.stock } : item));
+                } else {
+                    setCart(prevCart => prevCart.map(item => item.id === productId ? { ...item, quantity: newQuantity } : item));
+                }
+            };
+            
+            const removeFromCart = (productId) => {
+                 setCart(prevCart => prevCart.filter(item => item.id !== productId));
+            };
+
+            const cartTotal = useMemo(() => {
+                return cart.reduce((total, item) => total + Number(item.price) * item.quantity, 0);
+            }, [cart]);
+            
+            const totalItems = useMemo(() => {
+                return cart.reduce((sum, item) => sum + item.quantity, 0);
+            }, [cart]);
+
+            const renderView = () => {
+                switch (view) {
+                    case 'admin':
+                        return <AdminPanel onExit={() => setView('customer')} showToast={showToastMessage} />;
+                    case 'customer':
+                    default:
+                        return <CustomerView 
+                                    products={products} 
+                                    cart={cart} 
+                                    addToCart={addToCart} 
+                                    updateCartQuantity={updateCartQuantity}
+                                    removeFromCart={removeFromCart}
+                                    cartTotal={cartTotal}
+                                    totalItems={totalItems}
+                                    showToast={showToastMessage} 
+                                    refreshProducts={fetchProducts} 
+                                    isLoading={isLoading} 
+                                    setLastOrder={setLastOrder} 
+                                    setCart={setCart}
+                                    onAdminClick={() => setView('admin')}
+                                />;
+                }
+            };
+
+            return (
+                <div className="bg-gray-50 min-h-screen">
+                    {isLoading && <LoadingOverlay text={loadingText} />}
+                    {toast.show && <div className="fixed top-5 right-5 z-50"><Toast message={toast.message} type={toast.type} onDismiss={() => setToast({ ...toast, show: false })} /></div>}
+                    <main>
+                        {lastOrder ? <OrderSuccessModal order={lastOrder} onNewOrder={() => { setLastOrder(null); fetchProducts(); }} /> : renderView()}
+                    </main>
+                </div>
+            );
+        }
+
+        // 接收 setCart 以便在订单成功后清空购物车
+        const CustomerView = ({
+            products,
+            cart,
+            addToCart,
+            updateCartQuantity,
+            removeFromCart,
+            cartTotal,
+            totalItems,
+            showToast,
+            refreshProducts,
+            isLoading,
+            setLastOrder,
+            // 新增：从父组件接收 setCart，用于订单提交成功后清空购物车
+            setCart,
+            onAdminClick,
+        }) => {
+            const [isCartOpen, setIsCartOpen] = useState(false);
+            const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+            const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+            const [orderData, setOrderData] = useState(null);
+
+            const categories = useMemo(() => ['全部商品', ...new Set(products.map(p => p.category))], [products]);
+            const [activeCategory, setActiveCategory] = useState('全部商品');
+
+            const filteredProducts = useMemo(() => {
+                if (activeCategory === '全部商品') return products;
+                return products.filter(p => p.category === activeCategory);
+            }, [products, activeCategory]);
+            
+            // Enhanced: Always show WhatsApp modal after order submission
+            // Accept setCart as a prop
+            const handleOrderSuccess = (finalOrder) => {
+                if (typeof setCart === 'function') setCart([]);
+                setIsConfirmOpen(false);
+                setIsCheckoutOpen(false);
+                setLastOrder(finalOrder);
+                refreshProducts();
+                // Debug log for troubleshooting
+                console.log('[OrderSuccess] Showing WhatsApp modal for order:', finalOrder);
+            };
+
+            return (
+                <div>
+                    <header className="bg-white shadow-md sticky top-0 z-40">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between items-center py-4">
+                                <div className="flex items-center gap-3">
+                                    <i className="fas fa-utensils text-3xl text-red-600"></i>
+                                    <h1 className="text-2xl font-bold text-gray-800">锋味派美食团购</h1>
+                                </div>
+                                <button onClick={onAdminClick} className="text-gray-600 hover:text-red-600 transition-colors">
+                                    <i className="fas fa-user-shield text-2xl"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div className="mb-8 sticky top-[80px] bg-gray-50/90 backdrop-blur-sm py-3 z-30">
+                            <div className="flex space-x-2 overflow-x-auto pb-2">
+                                {categories.map(category => (
+                                    <button
+                                        key={category}
+                                        onClick={() => setActiveCategory(category)}
+                                        className={`px-4 py-2 text-sm font-semibold rounded-full whitespace-nowrap transition-colors ${activeCategory === category ? 'bg-red-600 text-white shadow' : 'bg-white text-gray-700 hover:bg-gray-200'}`}
+                                    >
+                                        {category}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                            {isLoading ? (
+                                <div className="col-span-full text-center p-10"><LoadingSpinner text="加载商品中..." /></div>
+                            ) : products.length === 0 ? (
+                                 <p className="col-span-full text-center text-gray-500">暂无商品，请联系管理员添加。</p>
+                            ) : filteredProducts.length > 0 ? (
+                                filteredProducts.map(product => (
+                                    <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
+                                ))
+                            ) : (
+                                <p className="col-span-full text-center text-gray-500">该分类下暂无商品。</p>
+                            )}
+                        </div>
+
+                        {cart.length > 0 && (
+                            <div className="fixed bottom-6 right-6 z-40">
+                                <button onClick={() => setIsCartOpen(true)} className="bg-red-600 text-white rounded-full p-4 shadow-lg hover:bg-red-700 transition-transform transform hover:scale-110 flex items-center gap-3">
+                                    <i className="fas fa-shopping-cart text-2xl"></i>
+                                    <span className="font-bold text-lg">RM{cartTotal.toFixed(2)}</span>
+                                    <span className="absolute -top-2 -right-2 bg-yellow-400 text-black text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">{totalItems}</span>
+                                </button>
+                            </div>
+                        )}
+                        
+                        <CartSidebar 
+                            isOpen={isCartOpen}
+                            cart={cart} 
+                            updateQuantity={updateCartQuantity}
+                            removeFromCart={removeFromCart}
+                            totalPrice={cartTotal}
+                            totalItems={totalItems}
+                            onClose={() => setIsCartOpen(false)} 
+                            onCheckout={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }} 
+                        />
+                        
+                        {isCheckoutOpen && <CheckoutModal cart={cart} total={cartTotal} onClose={() => setIsCheckoutOpen(false)} onConfirm={(data) => { setOrderData(data); setIsCheckoutOpen(false); setIsConfirmOpen(true); }} showToast={showToast} />}
+                        
+                        {isConfirmOpen && <ConfirmationModal orderData={orderData} onConfirm={handleOrderSuccess} onCancel={() => { setIsConfirmOpen(false); setIsCheckoutOpen(true); }} showToast={showToast} />}
+                    </div>
+                </div>
+            );
+        };
+
+        const CartSidebar = ({ isOpen, cart, updateQuantity, removeFromCart, totalPrice, totalItems, onClose, onCheckout }) => {
+            const handleQuantityChange = (item, newQuantity) => {
+                updateQuantity(item.id, newQuantity);
+            };
+
+            return (
+                <div>
+                  <div
+                    className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-300 ${
+                      isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
+                    onClick={onClose}
+                  />
+                  <div
+                    className={`fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-xl z-50 transform transition-transform duration-300 ${
+                      isOpen ? 'translate-x-0' : 'translate-x-full'
+                    } flex flex-col`}
+                  >
+                    <header className="flex items-center justify-between p-5 border-b">
+                      <h2 className="text-xl font-bold text-gray-800">购物车</h2>
+                      <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
+                        <i className="fas fa-times text-xl"></i>
+                      </button>
+                    </header>
+                    
+                    <div className="flex-grow overflow-y-auto px-5 divide-y">
+                      {cart.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center text-gray-500">
+                          <span className="text-6xl mb-4">🛍️</span>
+                          <h3 className="font-semibold text-lg">购物车是空的</h3>
+                          <p className="text-sm">快去选购美食吧！</p>
+                        </div>
+                      ) : (
+                        cart.map(item => (
+                            <div key={item.id} className="flex items-center gap-4 py-4">
+                                <div className="text-4xl bg-gray-100 p-2 rounded-lg">{item.emoji}</div>
+                                <div className="flex-grow">
+                                    <p className="font-semibold text-gray-800">{item.name}</p>
+                                    <p className="text-sm text-red-600 font-bold">RM{item.price.toFixed(2)}</p>
+                                    {item.is_unlimited && <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">预购</span>}
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <button onClick={() => handleQuantityChange(item, item.quantity - 1)} className="w-7 h-7 rounded-md bg-gray-200 text-gray-800 hover:bg-gray-300 transition-colors active:scale-90">-</button>
+                                        <input
+                                            type="number"
+                                            value={item.quantity}
+                                            onChange={e => handleQuantityChange(item, parseInt(e.target.value) || 1)}
+                                            className="w-12 text-center border border-gray-300 rounded-md h-7"
+                                            max={item.is_unlimited ? undefined : item.stock}
+                                            min="1"
+                                        />
+                                        <button onClick={() => handleQuantityChange(item, item.quantity + 1)} className="w-7 h-7 rounded-md bg-gray-200 text-gray-800 hover:bg-gray-300 transition-colors active:scale-90">+</button>
+                                    </div>
+                                </div>
+                                <button onClick={() => removeFromCart(item.id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                    <i className="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        ))
+                      )}
+                    </div>
+
+                    <footer className="p-5 border-t bg-gray-50">
+                      <div className="flex justify-between items-center mb-4 text-lg">
+                        <span className="font-semibold text-gray-800">总计:</span>
+                        <span className="font-extrabold text-red-600 text-2xl">RM{totalPrice.toFixed(2)}</span>
+                      </div>
+                      <button
+                        onClick={onCheckout}
+                        disabled={totalItems === 0}
+                        className="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-red-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <i className="fa fa-credit-card"></i>
+                        立即结账
+                      </button>
+                    </footer>
+                  </div>
+                </div>
+            );
+        };
+
+        const CheckoutModal = ({ cart, total, onClose, onConfirm, showToast }) => {
+            const [formData, setFormData] = useState({ name: '', phone: '', delivery: '', remarks: '', paymentMethod: '' });
+            const [paymentProof, setPaymentProof] = useState(null);
+            const [fileName, setFileName] = useState('');
+            const [errors, setErrors] = useState({});
+            const [agree, setAgree] = useState(false);
+
+            const validate = () => {
+                const newErrors = {};
+                if (!agree) newErrors.agree = '请阅读并同意条款';
+                if (!formData.name) newErrors.name = '请输入姓名';
+                if (!formData.phone || !/^(\+?6?01)[0-46-9]-?[0-9]{7,8}$/.test(formData.phone)) newErrors.phone = '请输入有效的电话号码';
+                if (!formData.delivery) newErrors.delivery = '请选择取货方式';
+                if (!formData.paymentMethod) newErrors.paymentMethod = '请选择付款方式';
+                if (!paymentProof) newErrors.paymentProof = '请上传支付凭证';
+                setErrors(newErrors);
+                return Object.keys(newErrors).length === 0;
+            };
+
+            const handleChange = (e) => {
+                setFormData({ ...formData, [e.target.name]: e.target.value });
+            };
+
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    setPaymentProof(file);
+                    setFileName(file.name);
+                }
+            };
+            
+            const handleNextStep = (e) => {
+                e.preventDefault();
+                if (!validate()) {
+                    showToast('请填写所有必填项', 'warning');
+                    return;
+                }
+                onConfirm({ ...formData, paymentProof, cart, total });
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-fade-in">
+                        <div className="flex justify-between items-center p-5 border-b">
+                            <h2 className="text-xl font-bold">填写订单信息</h2>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <form onSubmit={handleNextStep} className="flex-grow overflow-y-auto p-6 space-y-6">
+                            <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-700">
+                                <h4 className="font-bold">⚠️ 重要声明 / Important Notice</h4>
+                                <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+                                    <li>此为预购商品，订单汇总后统一向供应商订购。</li>                                    
+                                    <li>This is a pre-order. We will place the bulk order after collecting all purchases.</li>
+                                    <li>预计等待时间：30-60天（从下单日起计算）。</li>
+                                    <li>Estimated waiting time: 30-60 days (from order date).(RM20)。</li>
+                                    <li>当前价格<strong>不包含</strong>国际运费，运费将根据实际物流成本后续通知收取。</li>
+                                    <li>Current prices <strong>DO NOT INCLUDE</strong> international shipping fees. Fees will be calculated later.</li>
+                                    <li>价格不含本地运费，可自取也可以安排Lalamove (KLANG valley地区一单RM20)。</li>
+                                </ul>
+                                <div className="mt-4">
+                                    <label className="flex items-center">
+                                        <input type="checkbox" checked={agree} onChange={() => setAgree(!agree)} className="h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500" />
+                                        <span className="ml-2 text-sm text-gray-900">我已阅读并同意上述条款</span>
+                                    </label>
+                                    {errors.agree && <p className="text-red-500 text-xs mt-1">{errors.agree}</p>}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="font-semibold">姓名 *</label>
+                                    <input type="text" name="name" value={formData.name} onChange={handleChange} className={`w-full mt-1 p-2 border rounded ${errors.name ? 'border-red-500' : 'border-gray-300'}`} />
+                                    {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+                                </div>
+                                <div>
+                                    <label className="font-semibold">电话 *</label>
+                                    <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`w-full mt-1 p-2 border rounded ${errors.phone ? 'border-red-500' : 'border-gray-300'}`} />
+                                     {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
+                                </div>
+                                <div>
+                                    <label className="font-semibold">取货方式 *</label>
+                                    <select name="delivery" value={formData.delivery} onChange={handleChange} className={`w-full mt-1 p-2 border rounded ${errors.delivery ? 'border-red-500' : 'border-gray-300'}`}>
+                                        <option value="">请选择</option>
+                                        <option value="self-pickup">自取</option>
+                                        <option value="lalamove">Lalamove （请在下面备注栏填写配送地址）</option>
+                                    </select>
+                                     {errors.delivery && <p className="text-red-500 text-xs mt-1">{errors.delivery}</p>}
+                                </div>
+                                 {formData.delivery === 'self-pickup' && (
+                                    <div className="md:col-span-2 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm">
+                                        <p><strong>自取地址:</strong> {SELF_PICKUP_ADDRESS}</p>
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="font-semibold">付款方式 *</label>
+                                    <select name="paymentMethod" value={formData.paymentMethod} onChange={handleChange} className={`w-full mt-1 p-2 border rounded ${errors.paymentMethod ? 'border-red-500' : 'border-gray-300'}`}>
+                                        <option value="">请选择</option>
+                                        <option value="Maybank QR">Maybank QR</option>
+                                        <option value="TNG eWallet">TNG eWallet</option>
+                                    </select>
+                                    {errors.paymentMethod && <p className="text-red-500 text-xs mt-1">{errors.paymentMethod}</p>}
+                                </div>
+                                {formData.paymentMethod && (
+                                     <div className="md:col-span-2 flex justify-center gap-4">
+                                        {formData.paymentMethod === 'Maybank QR' && <img src="https://edfnhhthztskuuosuasw.supabase.co/storage/v1/object/public/product-photos/IMG_4042.png" alt="Maybank QR" className="w-40 h-40 rounded-lg shadow-md" />}
+                                        {formData.paymentMethod === 'TNG eWallet' && <img src="https://edfnhhthztskuuosuasw.supabase.co/storage/v1/object/public/product-photos/IMG_4043.jpeg" alt="TNG QR" className="w-40 h-40 rounded-lg shadow-md" />}
+                                    </div>
+                                )}
+                                <div className="md:col-span-2">
+                                    <label className="font-semibold">上传转账凭证 *</label>
+                                    <div className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 ${errors.paymentProof ? 'border-red-500' : 'border-gray-300'} border-dashed rounded-md`}>
+                                        <div className="space-y-1 text-center">
+                                            <i className="fas fa-cloud-upload-alt text-4xl text-gray-400"></i>
+                                            <div className="flex text-sm text-gray-600">
+                                                <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-red-600 hover:text-red-500 focus-within:outline-none">
+                                                    <span>上传文件</span>
+                                                    <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/*,.pdf" />
+                                                </label>
+                                                <p className="pl-1">或拖拽到此处</p>
+                                            </div>
+                                            <p className="text-xs text-gray-500">{fileName || 'PNG, JPG, PDF'}</p>
+                                        </div>
+                                    </div>
+                                    {errors.paymentProof && <p className="text-red-500 text-xs mt-1">{errors.paymentProof}</p>}
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="font-semibold">备注（如有）Remarks ， 或填写配送地址。</label>
+                                    <textarea name="remarks" value={formData.remarks} onChange={handleChange} rows="3" className="w-full mt-1 p-2 border border-gray-300 rounded"></textarea>
+                                </div>
+                            </div>
+                        </form>
+                        <div className="p-5 border-t bg-gray-50">
+                            <button onClick={handleNextStep} className="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-colors">
+                                确认订单
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        
+        const ConfirmationModal = ({ orderData, onConfirm, onCancel, showToast }) => {
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            const handleSubmit = async () => {
+                setIsSubmitting(true);
+                try {
+                    const { paymentProof, cart, total, ...formData } = orderData;
+                    // 解析查询参数（兼容哈希路由）
+                    const url = new URL(window.location.href);
+                    const params = url.searchParams;
+                    const queryOrderId = params.get('order_id');
+
+                    // 如果存在订单号，则处理运费支付；否则视为新订单
+                    if (queryOrderId) {
+                        const orderId = queryOrderId;
+                        const fileExt = paymentProof.name.split('.').pop();
+                        // 使用 order-proofs 桶存储运费支付凭证，文件名加 -shipping 后缀
+                        const shippingFileName = `proofs/${orderId}-shipping.${fileExt}`;
+                        const { error: shippingUploadError } = await supabase.storage
+                            .from('order-proofs')
+                            .upload(shippingFileName, paymentProof, { upsert: true, contentType: paymentProof.type });
+                        if (shippingUploadError && !shippingUploadError.message.includes('already exists')) {
+                            throw new Error(`运费凭证上传失败: ${shippingUploadError.message}`);
+                        }
+                        const { data: urlData } = supabase.storage
+                            .from('order-proofs')
+                            .getPublicUrl(shippingFileName);
+                        const shippingProofUrl = urlData.publicUrl;
+                        // 更新订单运费支付凭证
+                        const { error: updateError } = await supabase
+                            .from('orders')
+                            .update({ shipping_payment_proof_url: shippingProofUrl })
+                            .eq('order_id', orderId);
+                        if (updateError) {
+                            throw new Error(`订单更新失败: ${updateError.message}`);
+                        }
+                        showToast('运费支付成功，感谢您的付款！', 'success');
+                        // 关闭确认弹窗并返回上一层
+                        onCancel();
+                    } else {
+                        // 新订单流程
+                        // 生成订单号
+                        const orderId = await generateOrderId();
+                        // 上传订单支付凭证
+                        const fileExt = paymentProof.name.split('.').pop();
+                        const newFileName = `${orderId}.${fileExt}`;
+                        const { error: uploadError } = await supabase.storage
+                            .from('payment-proofs')
+                            .upload(`proofs/${newFileName}`, paymentProof);
+                        if (uploadError) {
+                            throw new Error(`凭证上传失败: ${uploadError.message}`);
+                        }
+                        const { data: { publicUrl } } = supabase.storage
+                            .from('payment-proofs')
+                            .getPublicUrl(`proofs/${newFileName}`);
+                        const finalOrderData = {
+                            order_id: orderId,
+                            name: formData.name,
+                            phone: formData.phone,
+                            delivery_method: formData.delivery,
+                            payment_method: formData.paymentMethod,
+                            remarks: formData.remarks,
+                            order_items: cart.map(item => ({ id: item.id, product: item.name, quantity: item.quantity, price: item.price, emoji: item.emoji, is_unlimited: item.is_unlimited })),
+                            total_amount: total,
+                            payment_proof_url: publicUrl,
+                            status: 'pending'
+                        };
+                        // 插入新订单
+                        const { error: insertError } = await supabase.from('orders').insert([finalOrderData]);
+                        if (insertError) {
+                            throw new Error(`订单提交失败: ${insertError.message}`);
+                        }
+                        // 更新库存
+                        for (const item of cart) {
+                            if (!item.is_unlimited) {
+                                const { error: stockError } = await supabase.rpc('decrease_stock', {
+                                    p_id: item.id,
+                                    p_quantity: item.quantity
+                                });
+                                if (stockError) {
+                                    console.error(`产品 ${item.id} 库存更新失败: ${stockError.message}`);
+                                }
+                            }
+                        }
+                        onConfirm(finalOrderData);
+                    }
+                } catch (error) {
+                    showToast(`发生错误: ${error.message}`, 'danger');
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+            
+            const generateOrderId = async () => {
+              const today = new Date();
+              const datePrefix = `FW${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+              try {
+                const { count, error } = await supabase.from('orders').select('order_id', { count: 'exact', head: true }).like('order_id', `${datePrefix}%`);
+                if (error) throw error;
+                return `${datePrefix}${String((count || 0) + 1).padStart(3, '0')}`;
+              } catch (error) {
+                console.warn('获取订单计数失败，使用时间戳ID', error);
+                return `FW${Date.now().toString().slice(-8)}`;
+              }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg animate-fade-in">
+                        <div className="p-6">
+                            <h2 className="text-xl font-bold text-center mb-4">订单确认</h2>
+                            <div className="space-y-2 text-sm">
+                                <p><strong>姓名:</strong> {orderData.name}</p>
+                                <p><strong>电话:</strong> {orderData.phone}</p>
+                                <p><strong>取货方式:</strong> {orderData.delivery === 'self-pickup' ? '自取' : 'Lalamove'}</p>
+                                <p><strong>付款方式:</strong> {orderData.paymentMethod}</p>
+                                <hr className="my-2"/>
+                                <h3 className="font-semibold">订单明细:</h3>
+                                <ul className="list-disc list-inside pl-4">
+                                    {orderData.cart.map(item => (
+                                        <li key={item.id}>{item.name} x {item.quantity} = RM{(Number(item.price) * item.quantity).toFixed(2)}</li>
+                                    ))}
+                                </ul>
+                                <hr className="my-2"/>
+                                <p className="text-right font-bold text-lg">总金额: <span className="text-red-600">RM{orderData.total.toFixed(2)}</span></p>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 bg-gray-50 flex justify-between rounded-b-lg">
+                            <button onClick={onCancel} disabled={isSubmitting} className="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">
+                                返回修改
+                            </button>
+                            <button onClick={handleSubmit} disabled={isSubmitting} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400">
+                                {isSubmitting ? '提交中...' : '确认并提交'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        
+
+
+        // --- OrderSuccessModal: WhatsApp confirmation, preview, copy, redirect ---
+        const OrderSuccessModal = ({ order, onNewOrder }) => {
+            // Build WhatsApp message (logic from oldindex.html)
+            const buildWhatsAppMessage = useCallback(() => {
+                try {
+                    let msg = `🛎️ *锋味派新订单 #${order.order_id}*\n\n`;
+                    msg += `👤 *客户信息*\n`;
+                    msg += `📛 姓名: ${order.name}\n`;
+                    msg += `📱 电话: ${order.phone}\n`;
+                    msg += `🚚 取货方式: ${order.delivery_method === 'self-pickup' ? '自取' : 'Lalamove送货'}\n`;
+                    if (order.delivery_method === 'self-pickup') {
+                        msg += `📍 自取地址: ${SELF_PICKUP_ADDRESS}\n`;
+                        msg += `⏰ 取货时间: 另行通知\n`;
+                        msg += `📞 联络号码: ${WHATSAPP_NUMBER.replace(/^60/, '0')}\n`;
+                    }
+                    msg += `\n🛒 *订单明细*\n`;
+                    order.order_items.forEach(item => {
+                        // Use emoji from item, fallback to product type emoji if missing
+                        let emoji = item.emoji;
+                        if (!emoji) {
+                            // Try to guess emoji by product name
+                            if (item.product.includes('烤肠')) emoji = '🌭';
+                            else if (item.product.includes('虾')) emoji = '🦐';
+                            else if (item.product.includes('披萨')) emoji = '🍕';
+                            else if (item.product.includes('汤包')) emoji = '🥟';
+                            else if (item.product.includes('酥饼')) emoji = '🥮';
+                            else if (item.product.includes('鸡排') || item.product.includes('鸡翅')) emoji = '🍗';
+                            else emoji = '▫️';
+                        }
+                        const typeLabel = item.is_unlimited ? ' (预购)' : ' (现货)';
+                        msg += `${emoji} ${item.product}${typeLabel} × ${item.quantity} = RM${(item.quantity * item.price).toFixed(2)}\n`;
+                    });
+                    msg += `\n💰 *总金额: RM${order.total_amount.toFixed(2)}*\n`;
+                    msg += `📝 *备注*: ${order.remarks || '无'}\n`;
+                    msg += `📅 *下单时间*: ${new Date().toLocaleString('zh-CN')}`;
+                    return msg;
+                } catch (err) {
+                    console.error('[OrderSuccessModal] WhatsApp message build error:', err, order);
+                    return '订单信息生成失败，请联系管理员。';
+                }
+            }, [order]);
+
+            // State for dialog and success
+            const [showDialog, setShowDialog] = useState(true);
+            const [showSuccess, setShowSuccess] = useState(false);
+            const [hasRedirected, setHasRedirected] = useState(false);
+            const whatsappMsg = useMemo(() => buildWhatsAppMessage(), [buildWhatsAppMessage]);
+            const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMsg)}`;
+
+            // Copy WhatsApp message to clipboard
+            const handleCopy = useCallback(() => {
+                try {
+                    navigator.clipboard.writeText(whatsappMsg).then(() => {
+                        window.alert('WhatsApp消息已复制到剪贴板！');
+                    }, () => {
+                        window.alert('复制失败，请手动复制。');
+                    });
+                } catch (err) {
+                    window.alert('复制失败，请手动复制。');
+                    console.error('[OrderSuccessModal] Clipboard copy error:', err);
+                }
+            }, [whatsappMsg]);
+
+            // Confirm and show success dialog
+            const handleSend = useCallback(() => {
+                setShowDialog(false);
+                setShowSuccess(true);
+                console.log('[OrderSuccessModal] User confirmed order, showing WhatsApp redirect dialog.');
+            }, []);
+
+            // On success, redirect to WhatsApp and reset order
+            const handleSuccessConfirm = useCallback(() => {
+                try {
+                    if (!hasRedirected) {
+                        setHasRedirected(true);
+                        window.location.href = whatsappUrl;
+                        console.log('[OrderSuccessModal] Redirecting to WhatsApp:', whatsappUrl);
+                    }
+                } catch (err) {
+                    window.alert('跳转WhatsApp失败，请手动发送订单信息。');
+                    console.error('[OrderSuccessModal] WhatsApp redirect error:', err);
+                }
+                setShowSuccess(false);
+                onNewOrder();
+            }, [hasRedirected, whatsappUrl, onNewOrder]);
+
+            // WhatsApp confirmation dialog
+            if (showDialog) {
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+                        <div className="bg-white rounded-lg shadow-xl w-full max-w-lg animate-fade-in">
+                            <div className="p-6">
+                                <h2 className="text-xl font-bold text-center mb-4">订单确认</h2>
+                                <div className="space-y-2 text-sm">
+                                    <p><strong>订单号:</strong> {order.order_id}</p>
+                                    <p><strong>姓名:</strong> {order.name}</p>
+                                    <p><strong>电话:</strong> {order.phone}</p>
+                                    <p><strong>取货方式:</strong> {order.delivery_method === 'self-pickup' ? '自取' : 'Lalamove送货'}</p>
+                                    <p><strong>付款方式:</strong> {order.payment_method}</p>
+                                    <hr className="my-2"/>
+                                    <h3 className="font-semibold">订单明细:</h3>
+                                    <ul className="list-disc list-inside pl-4">
+                                        {order.order_items.map(item => (
+                                            <li key={item.product}>{item.product} × {item.quantity} = RM{(item.quantity * item.price).toFixed(2)}</li>
+                                        ))}
+                                    </ul>
+                                    <hr className="my-2"/>
+                                    <p className="text-right font-bold text-lg">总金额: <span className="text-red-600">RM{order.total_amount.toFixed(2)}</span></p>
+                                </div>
+                                <div className="whatsapp-preview mt-4 p-3 bg-gray-50 rounded">
+                                    <strong>将发送到WhatsApp的内容:</strong>
+                                    <p style={{ color: 'red', fontWeight: 'bold' }}>请务必复制以下信息，并在跳转WhatsApp后点击发送！</p>
+                                    <button onClick={handleCopy} className="mb-2 px-4 py-2 bg-green-500 text-white rounded">复制WhatsApp消息</button>
+                                    <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', background: '#f5f5f5', padding: '10px', borderRadius: '8px' }}>{whatsappMsg.replace(/\*/g, '')}</div>
+                                </div>
+                                <div className="flex justify-between mt-6">
+                                    <button onClick={() => setShowDialog(false)} className="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">取消</button>
+                                    <button onClick={handleSend} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">确认并发送</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+            // Success dialog and WhatsApp redirect
+            if (showSuccess) {
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+                        <div className="bg-white rounded-lg shadow-xl w-full max-w-md text-center animate-fade-in">
+                            <div className="p-6">
+                                <i className="fas fa-check-circle text-5xl text-green-500 mb-4"></i>
+                                <h2 className="text-2xl font-bold mb-2">订单提交成功!</h2>
+                                <p className="text-gray-600 mb-4">订单已成功保存，请点击"好的"跳转到WhatsApp发送订单信息。</p>
+                                <button onClick={handleSuccessConfirm} className="w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors mb-3">好的 (OK)</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+            return null;
+        };
+
+        const AdminPanel = ({ onExit, showToast }) => {
+            const [isAuthenticated, setAuthenticated] = useState(false);
+            const [password, setPassword] = useState('');
+            const [activeTab, setActiveTab] = useState('products');
+            const [products, setProducts] = useState([]);
+            const [orders, setOrders] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [productToEdit, setProductToEdit] = useState(null);
+
+            const fetchAllData = useCallback(async () => {
+                setIsLoading(true);
+                try {
+                    const [productsData, ordersData] = await Promise.all([
+                        supabase.from('products').select('*').order('id'),
+                        supabase.from('orders').select('*').order('created_at', { ascending: false })
+                    ]);
+
+                    if (productsData.error) throw productsData.error;
+                    if (ordersData.error) throw ordersData.error;
+
+                    setProducts(productsData.data.map(p => ({
+                        ...p,
+                        image: p.image_url, 
+                        stock: p.stock_quantity ?? 0, 
+                        minStock: p.min_stock_threshold ?? 5 
+                    })));
+                    setOrders(ordersData.data);
+
+                } catch (error) {
+                    showToast(`加载后台数据失败: ${error.message}`, 'danger');
+                } finally {
+                    setIsLoading(false);
+                }
+            }, [showToast]);
+
+            useEffect(() => {
+                if (isAuthenticated) {
+                    fetchAllData();
+                }
+            }, [isAuthenticated, fetchAllData]);
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (password === ADMIN_PASSWORD) {
+                    setAuthenticated(true);
+                    showToast('登录成功', 'success');
+                } else {
+                    showToast('管理员密码错误', 'danger');
+                    setPassword('');
+                }
+            };
+            
+            const handleSaveSuccess = () => {
+                setIsModalOpen(false);
+                setProductToEdit(null);
+                fetchAllData();
+            };
+
+            if (!isAuthenticated) {
+                return (
+                  <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm relative">
+                      <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">管理员登录</h2>
+                      <form onSubmit={handleLogin} className="space-y-4">
+                        <div>
+                          <label htmlFor="password-admin" className="sr-only">Password</label>
+                          <input
+                            id="password-admin"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="请输入管理员密码"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-red-500 focus:ring-red-500"
+                            autoFocus
+                          />
+                        </div>
+                        <button type="submit" className="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors shadow-md active:scale-95">
+                          登录
+                        </button>
+                        <button type="button" onClick={onExit} className="w-full bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors mt-2">
+                          返回商店
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-100 p-4 sm:p-6 lg:p-8">
+                    <div className="max-w-7xl mx-auto">
+                        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                            <h1 className="text-3xl font-bold text-gray-800">管理后台</h1>
+                            <button onClick={onExit} className="bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
+                                返回商店
+                            </button>
+                        </header>
+
+                        <div className="mb-4 border-b border-gray-200">
+                            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                                <button onClick={() => setActiveTab('products')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'products' ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>
+                                    商品管理
+                                </button>
+                                <button onClick={() => setActiveTab('orders')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'orders' ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>
+                                    订单管理
+                                </button>
+                            </nav>
+                        </div>
+                        
+                        {isLoading ? <div className="flex justify-center p-10"><LoadingSpinner /></div> : (
+                            <div>
+                                {activeTab === 'orders' && <OrderManagementPanel orders={orders} refreshOrders={fetchAllData} showToast={showToast} />}
+                                {activeTab === 'products' && <ProductManagementPanel products={products} onAddProduct={() => { setProductToEdit(null); setIsModalOpen(true); }} onEditProduct={(p) => { setProductToEdit(p); setIsModalOpen(true); }} />}
+                            </div>
+                        )}
+                    </div>
+                    {isModalOpen && <ProductEditModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSaveSuccess={handleSaveSuccess} product={productToEdit} />}
+                </div>
+            );
+        };
+        
+        const OrderManagementPanel = ({ orders, refreshOrders, showToast }) => {
+            // Shipping payment proof modal state
+            const [shippingProofModalOrder, setShippingProofModalOrder] = useState(null);
+            const [shippingProofFile, setShippingProofFile] = useState(null);
+            const [isUploadingShippingProof, setIsUploadingShippingProof] = useState(false);
+
+            const handleViewShippingProof = (order) => {
+                setShippingProofModalOrder(order);
+                setShippingProofFile(null);
+            };
+            const handleCloseShippingProof = () => {
+                setShippingProofModalOrder(null);
+                setShippingProofFile(null);
+            };
+            const handleShippingProofFileChange = (e) => {
+                setShippingProofFile(e.target.files[0]);
+            };
+            const handleUploadShippingProof = async () => {
+                if (!shippingProofFile || !shippingProofModalOrder) return;
+                setIsUploadingShippingProof(true);
+                try {
+                    const ext = shippingProofFile.name.split('.').pop();
+                    // Use 'proofs' folder in 'order-proofs' bucket, and unique filename for shipping proof
+                    const filename = `proofs/${shippingProofModalOrder.order_id}-shipping.${ext}`;
+                    const { error: uploadError } = await supabase.storage
+                        .from('order-proofs')
+                        .upload(filename, shippingProofFile, {
+                            cacheControl: '3600',
+                            upsert: true,
+                            contentType: shippingProofFile.type
+                        });
+                    if (uploadError && !uploadError.message.includes('already exists')) {
+                        showToast('运费支付凭证上传失败: ' + uploadError.message, 'danger');
+                        setIsUploadingShippingProof(false);
+                        return;
+                    }
+                    const { data: urlData } = supabase.storage
+                        .from('order-proofs')
+                        .getPublicUrl(filename);
+                    const shippingProofUrl = urlData.publicUrl;
+                    // Update order record with shipping payment proof URL
+                    const { error: updateError } = await supabase
+                        .from('orders')
+                        .update({ shipping_payment_proof_url: shippingProofUrl })
+                        .eq('order_id', shippingProofModalOrder.order_id);
+                    if (updateError) {
+                        showToast('订单更新失败: ' + updateError.message, 'danger');
+                    } else {
+                        showToast('运费支付凭证已上传', 'success');
+                        refreshOrders();
+                        handleCloseShippingProof();
+                    }
+                } catch (err) {
+                    showToast('上传失败: ' + err.message, 'danger');
+                }
+                setIsUploadingShippingProof(false);
+            };
+            const [isUpdating, setIsUpdating] = useState(null);
+            const isMounted = useRef(true);
+
+            // Set up a ref to track if the component is mounted
+            useEffect(() => {
+                isMounted.current = true;
+                return () => {
+                    // This cleanup function will run when the component unmounts
+                    isMounted.current = false;
+                };
+            }, []); // The empty dependency array ensures this effect runs only once on mount and cleanup on unmount
+
+            const handleStatusChange = async (orderId, newStatus) => {
+                setIsUpdating(orderId);
+                const { error } = await supabase
+                    .from('orders')
+                    .update({ status: newStatus })
+                    .eq('id', orderId);
+                
+                // After the async operation, check if the component is still mounted before updating state
+                if (isMounted.current) {
+                    if (error) {
+                        showToast(`状态更新失败: ${error.message}`, 'danger');
+                    } else {
+                        showToast('订单状态已更新', 'success');
+                        if (refreshOrders) {
+                            refreshOrders();
+                        }
+                    }
+                    setIsUpdating(null);
+                }
+            };
+
+            const statusOptions = {
+                'pending': { label: '待处理', color: 'bg-yellow-200 text-yellow-800' },
+                'ready for pick up': { label: '待自取', color: 'bg-blue-200 text-blue-800' },
+                'delivered': { label: '已发货', color: 'bg-indigo-200 text-indigo-800' },
+                'completed': { label: '已完成', color: 'bg-green-200 text-green-800' },
+                'cancelled': { label: '已取消', color: 'bg-red-200 text-red-800' }
+            };
+            
+            const getStatusStyle = (status) => {
+                return statusOptions[status]?.color || 'bg-gray-200 text-gray-800';
+            };
+
+            // WhatsApp notification for shipping payment
+
+            const sendShippingWhatsapp = (order) => {
+                // Calculate shipping fee: RM5 per item
+                const totalItems = Array.isArray(order.order_items)
+                    ? order.order_items.reduce((sum, item) => sum + (item.quantity || 0), 0)
+                    : 0;
+                const shippingFee = totalItems * 5;
+                // Build WhatsApp message for shipping payment
+                const paymentLink = `https://fwgroupbuy.netlify.app/?order_id=${order.order_id}`;
+                const msg = `📦 *锋味派订单 #${order.order_id}*\n\n` +
+                    `亲爱的${order.name}，您的订单已准备发货。\n` +
+                    `请支付运费以完成配送。\n` +
+                    `订单号: ${order.order_id}\n` +
+                    `收件人: ${order.name}\n` +
+                    `联系电话: ${order.phone}\n` +
+                    `配送方式: ${order.delivery_method === 'self-pickup' ? '自取' : 'Lalamove送货'}\n` +
+                    `运费: RM${shippingFee.toFixed(2)} (RM5/件, 共${totalItems}件)\n` +
+                    `支付链接: ${paymentLink}\n` +
+                    `如已支付请忽略此消息，谢谢！`;
+                const whatsappUrl = `https://wa.me/${order.phone.startsWith('60') ? order.phone : '60' + order.phone.replace(/^0/, '')}?text=${encodeURIComponent(msg)}`;
+                window.open(whatsappUrl, '_blank');
+            };
+
+            // Payment proof modal state
+            const [proofModalOrder, setProofModalOrder] = useState(null);
+
+            const handleViewProof = (order) => {
+                setProofModalOrder(order);
+            };
+            const handleCloseProof = () => {
+                setProofModalOrder(null);
+            };
+
+            // 构建订单详情信息，格式与发送 WhatsApp 时一致，方便后台复制使用
+            const buildOrderDetailsMessage = (order) => {
+                try {
+                    let msg = `🛎️ *锋味派新订单 #${order.order_id}*\n\n`;
+                    msg += `👤 *客户信息*\n`;
+                    msg += `📛 姓名: ${order.name}\n`;
+                    msg += `📱 电话: ${order.phone}\n`;
+                    msg += `🚚 取货方式: ${order.delivery_method === 'self-pickup' ? '自取' : 'Lalamove送货'}\n`;
+                    msg += `\n🛒 *订单明细*\n`;
+                    if (Array.isArray(order.order_items)) {
+                        order.order_items.forEach(item => {
+                            let emoji = item.emoji;
+                            // 如果缺少 emoji，根据名称猜测一个基本图标
+                            if (!emoji) {
+                                if (item.product.includes('烤肠')) emoji = '🌭';
+                                else if (item.product.includes('虾')) emoji = '🦐';
+                                else if (item.product.includes('披萨')) emoji = '🍕';
+                                else if (item.product.includes('汤包')) emoji = '🥟';
+                                else if (item.product.includes('酥饼')) emoji = '🥮';
+                                else if (item.product.includes('鸡排') || item.product.includes('鸡翅')) emoji = '🍗';
+                                else emoji = '▫️';
+                            }
+                            const typeLabel = item.is_unlimited ? ' (预购)' : ' (现货)';
+                            const amount = (item.quantity * item.price).toFixed(2);
+                            msg += `${emoji} ${item.product}${typeLabel} × ${item.quantity} = RM${amount}\n`;
+                        });
+                    }
+                    msg += `\n💰 *总金额: RM${parseFloat(order.total_amount).toFixed(2)}*\n`;
+                    msg += `📝 *备注*: ${order.remarks || '无'}\n`;
+                    // 使用马来西亚当地时间格式
+                    const createdAt = order.created_at ? new Date(order.created_at) : new Date();
+                    msg += `📅 *下单时间*: ${createdAt.toLocaleString('zh-CN')}`;
+                    return msg;
+                } catch (err) {
+                    console.error('生成订单详情失败:', err);
+                    return '';
+                }
+            };
+
+            // 复制订单详情到剪贴板
+            const copyOrderDetails = async (order) => {
+                try {
+                    const msg = buildOrderDetailsMessage(order);
+                    await navigator.clipboard.writeText(msg.replace(/\*/g, ''));
+                    if (showToast) showToast('订单详情已复制到剪贴板', 'success');
+                } catch (err) {
+                    if (showToast) showToast('复制失败，请重试', 'danger');
+                    console.error('复制订单详情失败:', err);
+                }
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h2 className="text-xl font-bold mb-4">订单列表 ({orders.length})</h2>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left text-gray-500">
+                            <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                                <tr>
+                                    <th className="px-4 py-3">订单号</th>
+                                    <th className="px-4 py-3">客户</th>
+                                    <th className="px-4 py-3">详情</th>
+                                    <th className="px-4 py-3">总额</th>
+                                    <th className="px-4 py-3">状态</th>
+                                    <th className="px-4 py-3">时间</th>
+                                    <th className="px-4 py-3">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {orders.map(order => (
+                                    <tr key={order.id} className="bg-white border-b hover:bg-gray-50">
+                                        <td className="px-4 py-4 font-medium text-gray-900">{order.order_id}</td>
+                                        <td className="px-4 py-4">{order.name} <br/> <span className="text-xs text-gray-500">{order.phone}</span></td>
+                                        <td className="px-4 py-4 text-xs" dangerouslySetInnerHTML={{ __html: Array.isArray(order.order_items) ? order.order_items.map(item => `<div>${item.emoji} ${item.product} x ${item.quantity} = RM${(item.quantity * item.price).toFixed(2)}</div>`).join('') : '' }}></td>
+                                        <td className="px-4 py-4 font-bold text-red-600">RM{parseFloat(order.total_amount).toFixed(2)}</td>
+                                        <td className="px-4 py-4">
+                                            {isUpdating === order.id ? (
+                                                <span className="text-xs px-2.5 py-0.5">更新中...</span>
+                                            ) : (
+                                                <select
+                                                    value={order.status}
+                                                    onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                                                    className={`w-full text-xs font-medium p-1.5 rounded-md border-0 focus:ring-2 focus:ring-red-500 ${getStatusStyle(order.status)}`}
+                                                    style={{ 
+                                                        appearance: 'none', 
+                                                        WebkitAppearance: 'none', 
+                                                        MozAppearance: 'none', 
+                                                        paddingRight: '1.5rem', 
+                                                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, 
+                                                        backgroundPosition: 'right 0.25rem center', 
+                                                        backgroundRepeat: 'no-repeat', 
+                                                        backgroundSize: '1.25em 1.25em' 
+                                                    }}
+                                                >
+                                                    {Object.entries(statusOptions).map(([value, { label }]) => (
+                                                        <option key={value} value={value}>{label}</option>
+                                                    ))}
+                                                </select>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-4 text-xs">{new Date(order.created_at).toLocaleString('en-MY')}</td>
+                                        <td className="px-4 py-4 flex flex-col gap-2">
+                                            <a href={order.payment_proof_url} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline mb-1">
+                                                产品支付凭证
+                                            </a>
+                                            <button
+                                                className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-xs flex items-center gap-1"
+                                                title="预览产品支付凭证"
+                                                onClick={() => handleViewProof(order)}
+                                            >
+                                                <i className="fas fa-eye"></i> 产品预览
+                                            </button>
+                                            {/* 新增按钮：复制订单详情，方便后台处理货品 */}
+                                            <button
+                                                className="bg-teal-500 text-white px-3 py-1 rounded hover:bg-teal-600 text-xs flex items-center gap-1"
+                                                title="复制订单详情"
+                                                onClick={() => copyOrderDetails(order)}
+                                            >
+                                                <i className="fas fa-copy"></i> 复制详情
+                                            </button>
+                                            {order.shipping_payment_proof_url && (
+                                                <a href={order.shipping_payment_proof_url} target="_blank" rel="noopener noreferrer" className="font-medium text-purple-600 hover:underline mb-1">
+                                                    运费支付凭证
+                                                </a>
+                                            )}
+                                            <button
+                                                className="bg-purple-500 text-white px-3 py-1 rounded hover:bg-purple-600 text-xs flex items-center gap-1"
+                                                title="上传/预览运费支付凭证"
+                                                onClick={() => handleViewShippingProof(order)}
+                                            >
+                                                <i className="fas fa-eye"></i> 运费凭证
+                                            </button>
+                                            <button
+                                                className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 text-xs flex items-center gap-1"
+                                                title="发送运费通知到WhatsApp"
+                                                onClick={() => sendShippingWhatsapp(order)}
+                                            >
+                                                <i className="fab fa-whatsapp"></i> 运费通知
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {/* Product Payment Proof Modal */}
+                    {proofModalOrder && (
+                        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+                                <div className="flex justify-between items-center p-5 border-b">
+                                    <h2 className="text-xl font-bold">产品支付凭证预览</h2>
+                                    <button onClick={handleCloseProof} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                                </div>
+                                <div className="flex-grow overflow-y-auto p-6 flex flex-col items-center justify-center">
+                                    {proofModalOrder.payment_proof_url ? (
+                                        proofModalOrder.payment_proof_url.match(/\.pdf$/i) ? (
+                                            <iframe src={proofModalOrder.payment_proof_url} title="支付凭证PDF" className="w-full h-96 border rounded" />
+                                        ) : (
+                                            <img src={proofModalOrder.payment_proof_url} alt="支付凭证" className="max-w-full max-h-96 rounded shadow" />
+                                        )
+                                    ) : (
+                                        <p className="text-gray-500">未上传产品支付凭证</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {/* Shipping Payment Proof Modal */}
+                    {shippingProofModalOrder && (
+                        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+                                <div className="flex justify-between items-center p-5 border-b">
+                                    <h2 className="text-xl font-bold">运费支付凭证</h2>
+                                    <button onClick={handleCloseShippingProof} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                                </div>
+                                <div className="flex-grow overflow-y-auto p-6 flex flex-col items-center justify-center gap-4">
+                                    {shippingProofModalOrder.shipping_payment_proof_url ? (
+                                        shippingProofModalOrder.shipping_payment_proof_url.match(/\.pdf$/i) ? (
+                                            <iframe src={shippingProofModalOrder.shipping_payment_proof_url} title="运费支付凭证PDF" className="w-full h-96 border rounded" />
+                                        ) : (
+                                            <img src={shippingProofModalOrder.shipping_payment_proof_url} alt="运费支付凭证" className="max-w-full max-h-96 rounded shadow" />
+                                        )
+                                    ) : (
+                                        <p className="text-gray-500">未上传运费支付凭证</p>
+                                    )}
+                                    <div className="w-full mt-4">
+                                        <label className="block text-sm font-medium mb-2">上传新的运费支付凭证</label>
+                                        <input type="file" accept="image/*,.pdf" onChange={handleShippingProofFileChange} className="mb-2" />
+                                        <button
+                                            className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 text-sm"
+                                            disabled={isUploadingShippingProof || !shippingProofFile}
+                                            onClick={handleUploadShippingProof}
+                                        >
+                                            {isUploadingShippingProof ? '上传中...' : '上传运费支付凭证'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const ProductManagementPanel = ({ products, onAddProduct, onEditProduct }) => (
+            <div className="bg-white p-6 rounded-lg shadow-md">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">商品列表 ({products.length})</h2>
+                    <button onClick={onAddProduct} className="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">添加商品</button>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-500">
+                        <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                            <tr>
+                                <th className="px-6 py-3">ID</th><th className="px-6 py-3">商品</th><th className="px-6 py-3">价格</th><th className="px-6 py-3">库存</th><th className="px-6 py-3">状态</th><th className="px-6 py-3">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {products.map(product => (
+                                <tr key={product.id} className="bg-white border-b hover:bg-gray-50">
+                                    <td className="px-6 py-4">{product.id}</td>
+                                    <td className="px-6 py-4 font-medium text-gray-900">{product.name}</td>
+                                    <td className="px-6 py-4">RM{Number(product.price).toFixed(2)}</td>
+                                    <td className="px-6 py-4">{product.is_unlimited ? '无限' : product.stock}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full ${product.is_published ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-800'}`}>
+                                            {product.is_published ? '已上架' : '已下架'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <button onClick={() => onEditProduct(product)} className="font-medium text-blue-600 hover:underline">编辑</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+
+        const ProductEditModal = ({ isOpen, product, onSaveSuccess, onClose }) => {
+            const [formData, setFormData] = useState({
+                id: product?.id || null,
+                name: product?.name || '',
+                price: product?.price || 0,
+                stock: product?.stock_quantity || 0,
+                category: product?.category || '',
+                image_filename: product?.image || '',
+                emoji: product?.emoji || '',
+                minStock: product?.min_stock_threshold || 5,
+                is_published: product?.is_published ?? true,
+                is_unlimited: product?.is_unlimited ?? false,
+            });
+
+            const handleChange = (e) => {
+                const { name, value, type, checked } = e.target;
+                setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : (type === 'number' ? parseFloat(value) : value) }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    let result;
+                    const dataToSave = {
+                        name: formData.name,
+                        price: formData.price,
+                        category: formData.category,
+                        emoji: formData.emoji,
+                        image: formData.image_filename, 
+                        image_url: PRODUCT_IMAGE_BASE_URL + formData.image_filename, 
+                        stock_quantity: formData.stock, 
+                        min_stock_threshold: formData.minStock,
+                        is_published: formData.is_published,
+                        is_unlimited: formData.is_unlimited,
+                    };
+
+                    if (formData.id) {
+                        result = await supabase.from('products').update(dataToSave).eq('id', formData.id);
+                    } else {
+                        result = await supabase.from('products').insert([dataToSave]);
+                    }
+                    if (result.error) throw result.error;
+                    onSaveSuccess();
+                } catch (error) {
+                    alert(`保存失败: ${error.message}`);
+                }
+            };
+            
+            if (!isOpen) return null;
+
+            return (
+                 <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+                        <div className="flex justify-between items-center p-5 border-b">
+                            <h2 className="text-xl font-bold">{product ? '编辑商品' : '添加新商品'}</h2>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6 space-y-4">
+                            <div>
+                                <label className="font-semibold">名称</label>
+                                <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full mt-1 p-2 border rounded border-gray-300" required />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="font-semibold">价格 (RM)</label>
+                                    <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full mt-1 p-2 border rounded border-gray-300" required step="0.01" />
+                                </div>
+                                <div>
+                                    <label className="font-semibold">库存</label>
+                                    <input type="number" name="stock" value={formData.stock} onChange={handleChange} className="w-full mt-1 p-2 border rounded border-gray-300" required disabled={formData.is_unlimited} />
+                                </div>
+                            </div>
+                             <div>
+                                <label className="font-semibold">分类</label>
+                                <input type="text" name="category" value={formData.category} onChange={handleChange} className="w-full mt-1 p-2 border rounded border-gray-300" required />
+                            </div>
+                             <div>
+                                <label className="font-semibold">图片文件名 (例如: IMG_3859.jpeg)</label>
+                                <input type="text" name="image_filename" value={formData.image_filename} onChange={handleChange} className="w-full mt-1 p-2 border rounded border-gray-300" required />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="font-semibold">Emoji</label>
+                                    <input type="text" name="emoji" value={formData.emoji} onChange={handleChange} className="w-full mt-1 p-2 border rounded border-gray-300" />
+                                </div>
+                                <div>
+                                    <label className="font-semibold">低库存阈值</label>
+                                    <input type="number" name="minStock" value={formData.minStock} onChange={handleChange} className="w-full mt-1 p-2 border rounded border-gray-300" required />
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="font-semibold">状态</span>
+                                <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                    <input type="checkbox" name="is_published" id="is_published" checked={formData.is_published} onChange={handleChange} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                    <label htmlFor="is_published" className="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                                </div>
+                                <span className="text-gray-700">{formData.is_published ? '上架' : '下架'}</span>
+                            </div>
+                             <div className="flex items-center justify-between">
+                                <span className="font-semibold">类型</span>
+                                <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                    <input type="checkbox" name="is_unlimited" id="is_unlimited" checked={formData.is_unlimited} onChange={handleChange} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                    <label htmlFor="is_unlimited" className="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                                </div>
+                                <span className="text-gray-700">{formData.is_unlimited ? '无限购 (预购)' : '限购 (现货)'}</span>
+                            </div>
+                             <div className="p-5 border-t bg-gray-50 mt-4 -mx-6 -mb-6">
+                                <button type="submit" className="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700">保存商品</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
